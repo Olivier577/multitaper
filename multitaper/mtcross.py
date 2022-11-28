@@ -146,10 +146,10 @@ class MTCross:
         **Parameters**
         
         x : MTSpec class, or ndarray [npts,]
-            Time series signal x.
+            Time series signal x (independent/explanatory variable).
             If ndarray, the MTSpec class is created.
         y : MTSpec class, or ndarray [npts,]
-            Time series signal x
+            Time series signal y (dependent/response variable).
             If ndarray, the MTSpec class is created.
         nw : float, optional
             time bandwidth product, default = 4
@@ -308,7 +308,7 @@ class MTCross:
         self.se     = se
         self.wt     = wt
 
-        del Sxx, Syy, Sxy, Syx, cohe, phase, se, wt
+        del Sxx, Syy, Sxy, Syx, cohe, cohy, trf, phase, se, wt
 
     #-------------------------------------------------------------------------
     # Finished INIT mvspec

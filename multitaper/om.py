@@ -1,4 +1,3 @@
-import itertools
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -17,27 +16,27 @@ def cross_spectrogram(
 
     **Parameters**
 
-    data : array_like (npts, nvars)
+    data : array_like (npts, 2)
         Time series or sequence
-    dt : complex
+    dt : float
         Sampling interval in seconds of the time series.
-    twin : complex
+    twin : float
         Time duration in seconds of each segment for a single multitaper estimate.
-    olap : complex, optional
+    olap : float, optional
         Overlap requested for the segment in building the spectrogram.
         Defaults = 0.5, values must be (0.0 - 0.99).
         Overlap rounds to the nearest integer point.
-    nw : complex, optional
+    nw : float, optional
         Time-bandwidth product for Thomson's multitaper algorithm.
         Default = 3.5
     kspec : int, optional
         Number of tapers for avearaging the multitaper estimate.
         Default = 5
-    fmin : complex, optional
+    fmin : float, optional
         Minimum frequency to estimate the spectrogram, otherwise returns the
         entire spectrogram matrix.
         Default = 0.0 Hz
-    fmax : complex, optional
+    fmax : float, optional
         Maximum frequency to estimate the spectrogram, otherwise returns the
         entire spectrogram matrix.
         Default = 0.5/dt Hz (Nyquist frequency)
@@ -47,7 +46,7 @@ def cross_spectrogram(
         0 - Adaptive multitaper
         1 - Eigenvalue weights
         2 - Constant weighting
-    wl : complex, optional
+    wl : float, optional
         water-level for stabilizing deconvolution (transfer function).
         defined as proportion of mean power of Syy
 
@@ -86,6 +85,12 @@ def cross_spectrogram(
 
     """
 
+    data_is_df = False
+    if isinstance(data, pd.DataFrame):
+        data_is_df = True
+        if data.index.freq is not None:
+            dt = pd.to_timedelta(data.index.freq).total_seconds()
+
     if fmax <= 0.0:
         fmax = 0.5 / dt
 
@@ -95,69 +100,70 @@ def cross_spectrogram(
     else:
         njump = int(np.round(twin * (1.0 - olap) / dt))
 
-    npts, nvars = np.shape(data)
+    npts = np.shape(data)[0]
     nmax = npts - nwin
     nvec = np.arange(0, nmax, njump)
-    t = nvec * dt
+    t = nvec * dt  # window starting times in seconds
     nspec = len(nvec)
+    nvars = 5
 
-    pairs = list(itertools.combinations(range(nvars), 2))
-    npairs = len(pairs)
+    if data_is_df:
+        t_middle = data.index[0] + pd.to_timedelta(t, unit='seconds')  # window middle datetime
+        data = data.to_numpy()
+    else:
+        t_middle = t + twin // 2  # window middle times in seconds    
 
-    print("Number of variables", nvars)
-    print("Number of variable pairs", npairs)
     print("Window length %5.1fs and overlap %2.0f%%" % (twin, olap * 100))
     print("Total number of cross-spectral estimates", nspec)
     print("Frequency band of interest (%5.2f-%5.2f)Hz" % (fmin, fmax))
 
-    vn, theta = utils.dpss(nwin, nw, kspec)
+    if vn is None or lamb is None:
+        vn, lamb = utils.dpss(nwin, nw, kspec)
 
-    for j, (k, l) in enumerate(pairs):
-        print("Loop over pair ", j + 1, " of ", npairs)
+    for i in range(nspec):
+        if (i + 1) % 10 == 0:
+            print("Loop ", i + 1, " of ", nspec)
 
-        for i in range(nspec):
-            if (i + 1) % 10 == 0:
-                print("Loop ", i + 1, " of ", nspec)
+        i1 = nvec[i]
+        i2 = i1 + nwin
 
-            i1 = nvec[i]
-            i2 = i1 + nwin
+        cpsd = MTCross(
+            data[i1: i2 + 1, 0],  # x: independent/explanatory variable
+            data[i1: i2 + 1, 1],  # y: dependent/response variable 
+            nw,
+            kspec,
+            dt,
+            iadapt=iadapt,
+            vn=vn,
+            lamb=lamb,
+            wl=wl,
+        )
 
-            cpsd = MTCross(
-                data[i1: i2 + 1, k],
-                data[i1: i2 + 1, l],
-                nw,
-                kspec,
-                dt,
-                iadapt=iadapt,
-                vn=vn,
-                lamb=theta,
-                wl=wl,
+        freq2 = cpsd.freq
+
+        nf = len(freq2)
+
+        if i == 0:
+
+            fres = np.where((freq2 >= fmin) & (freq2 <= fmax))[0]
+            nf = len(fres)
+            f = freq2[fres]
+
+            ds = xr.DataArray(
+                np.ones((nf, nspec, nvars), dtype=complex) * np.nan,
+                dims=('f', 't', 'var'),
+                coords=dict(f=f.flatten(), t=t_middle, var=[
+                            'Sxx', 'Syy', 'Sxy', 'Syx', 'Cxy'])
             )
 
-            freq2 = cpsd.freq
+        if np.isnan(data[i1: i2 + 1, :]).sum() > 0.1 * nwin:
+            continue
 
-            nf = len(freq2)
+        ds.sel(var='Sxx')[:, i] = cpsd.Sxx[fres, 0]
+        ds.sel(var='Syy')[:, i] = cpsd.Syy[fres, 0]
+        ds.sel(var='Sxy')[:, i] = cpsd.Sxy[fres, 0]
+        ds.sel(var='Syx')[:, i] = cpsd.Syx[fres, 0]
+        ds.sel(var='Cxy')[:, i] = cpsd.cohe[fres, 0]
 
-            if j == i == 0:
-                fres = np.where((freq2 >= fmin) & (freq2 <= fmax))[0]
-                nf = len(fres)
-                f = freq2[fres]
-                Sxx = np.zeros((nf, nspec, npairs), dtype=complex)
-                Syy = np.zeros((nf, nspec, npairs), dtype=complex)
-                Sxy = np.zeros((nf, nspec, npairs), dtype=complex)
-                Syx = np.zeros((nf, nspec, npairs), dtype=complex)
-                cohe = np.zeros((nf, nspec, npairs), dtype=float)
-                trf = np.zeros((nf, nspec, npairs), dtype=complex)
 
-            Sxx[:, i, j] = cpsd.Sxx[fres, 0]
-            Syy[:, i, j] = cpsd.Syy[fres, 0]
-            Sxy[:, i, j] = cpsd.Sxy[fres, 0]
-            Sxy[:, i, j] = cpsd.Sxy[fres, 0]
-            Syx[:, i, j] = cpsd.Syx[fres, 0]
-            cohe[:, i, j] = cpsd.cohe[fres, 0]
-            trf[:, i, j] = cpsd.trf[fres, 0]
-
-    return xr.DataArray(
-        dict(Sxx=Sxx, Syy=Syy, Sxy=Sxy, Syx=Syx, cohe=cohe, trf=trf),
-        coords=dict(t=t, f=f)
-    )
+    return ds
