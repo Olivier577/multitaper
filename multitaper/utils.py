@@ -125,6 +125,8 @@ def set_xint(ising):
       
     return w, x
 
+W_1, X_1 = set_xint(1)
+
 #-------------------------------------------------------------------------
 # XINT - Numerical integration in the Fourier Domain using Ierly's method
 #-------------------------------------------------------------------------
@@ -196,7 +198,8 @@ def xint(a,b,tol,vn,npts):
     nomx  = 8
     lomx  = 256
     ising = 1
-    w, x = set_xint(ising)
+    # w, x = set_xint(ising)
+    w, x = W_1, X_1
 
     #--------------------------- 
     #   Check tol
