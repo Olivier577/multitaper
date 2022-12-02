@@ -9,3 +9,4 @@ data
 build.sh
 bld.dat
 zenodo*
+multitaper/examples/om_test.ipynb
