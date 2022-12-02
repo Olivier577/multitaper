@@ -1,6 +1,7 @@
 # Copyright 2022 Germán A. Prieto, MIT license
 
 from setuptools import setup, find_packages
+from Cython.Build import cythonize # added by om
 
 setup(
     name="multitaper",
@@ -24,6 +25,7 @@ setup(
         ]
     },
     python_requires=">=3.7",
+    ext_modules=cythonize("multitaper/src_om/*pyx"), # added by om
 )
 
 

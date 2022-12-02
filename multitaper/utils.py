@@ -41,7 +41,8 @@ import scipy.interpolate as interp
 import scipy.optimize as optim
 import os
 
-
+from cythonized import set_xint as set_xint_fast # added by om
+from cythonized import sft as sft_fast # added by om
 
 #-------------------------------------------------------------------------
 # SET_XINT - Set up weights and sample points for Ierly quadrature
@@ -125,11 +126,11 @@ def set_xint(ising):
       
     return w, x
 
-W_1, X_1 = set_xint(1)
-
 #-------------------------------------------------------------------------
 # XINT - Numerical integration in the Fourier Domain using Ierly's method
 #-------------------------------------------------------------------------
+
+W_1, X_1 = set_xint_fast(1)
 
 def xint(a,b,tol,vn,npts):
     """
@@ -1407,7 +1408,7 @@ def yk_reshape(yk_in,vn,p=None,fcrit=0.95):
 
     if (p is None):
         print('Doing F test')
-        p        = utils.ftest(vn,yk)[1]
+        p        = ftest(vn,yk)[1]
     yk       = np.copy(yk_in)
     npts     = np.shape(vn)[0]
     kspec    = np.shape(vn)[1]
@@ -1798,6 +1799,7 @@ def sft(x,om):
     |
 
     """ 
+    """
 
     n = np.shape(x)[0]
     pi = np.pi
@@ -1848,7 +1850,12 @@ def sft(x,om):
     st = -s*d
     ct = a-b*d/2.0
 
+    
+
     return ct, st
+
+    """
+    return sft_fast(x,om)
 
 #-------------------------------------------------------------------------
 # End SFT
