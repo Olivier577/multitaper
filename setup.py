@@ -2,6 +2,7 @@
 
 from setuptools import setup, find_packages
 from Cython.Build import cythonize # added by om
+import numpy as np # added by om
 
 setup(
     name="multitaper",
@@ -25,7 +26,8 @@ setup(
         ]
     },
     python_requires=">=3.7",
-    ext_modules=cythonize("multitaper/src_om/*pyx"), # added by om
+    ext_modules=cythonize("multitaper/src_om/*pyx"),
+    include_dirs=[np.get_include()] # added by om
 )
 
 
