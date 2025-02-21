@@ -38,6 +38,8 @@ from scipy import signal
 import scipy.linalg      as linalg
 import multitaper.utils      as utils 
 import multitaper.mtspec     as spec
+import pandas as pd
+import xarray as xr
 
 class MTCross:
 
@@ -816,3 +818,165 @@ class SineCross:
         return xcorr, dcohy, dconv
  
 
+def cross_spectrogram(
+        data, dt, twin, olap=0.5, nw=3.5, kspec=5, fmin=0.0, fmax=-1.0,
+        iadapt=0, vn=None, lamb=None, wl=0.0,
+):
+    """
+    Computes a cross-spectrogram with consecutive crossspec estimates.
+    Returns both Thomson's crossspec and the Quadratic crossspec estimate
+
+    **Parameters**
+
+    data : array_like (npts, 2)
+        Time series or sequence
+    dt : float
+        Sampling interval in seconds of the time series.
+    twin : float
+        Time duration in seconds of each segment for a single crossspec estimate.
+    olap : float, optional
+        Overlap requested for the segment in building the spectrogram.
+        Defaults = 0.5, values must be (0.0 - 0.99).
+        Overlap rounds to the nearest integer point.
+    nw : float, optional
+        Time-bandwidth product for Thomson's crossspec algorithm.
+        Default = 3.5
+    kspec : int, optional
+        Number of tapers for avearaging the crossspec estimate.
+        Default = 5
+    fmin : float, optional
+        Minimum frequency to estimate the spectrogram, otherwise returns the
+        entire spectrogram matrix.
+        Default = 0.0 Hz
+    fmax : float, optional
+        Maximum frequency to estimate the spectrogram, otherwise returns the
+        entire spectrogram matrix.
+        Default = 0.5/dt Hz (Nyquist frequency)
+    iadapt : integer, optional
+        User defined, determines which method for crossspec averaging to use.
+        Default = 0
+        0 - Adaptive crossspec
+        1 - Eigenvalue weights
+        2 - Constant weighting
+    wl : float, optional
+        water-level for stabilizing deconvolution (transfer function).
+        defined as proportion of mean power of Syy
+
+
+    **Returns**
+
+    f : ndarray
+        Array of sample frequencies.
+    t : ndarray
+        Array of segment times.
+    Quad : ndarray
+        Spectrogram of x using the quadratic crossspec estimate.
+    MT : ndarray
+        Spectrogram of x using Thomson's crossspec estimate.
+
+    By default, the last axis of Quad/MT corresponds to the segment times.
+
+    **See Also**
+
+    MTSpec: Multitaper estimate of a time series.
+
+    **Notes**
+
+    The code assumes a real input signals and thus mainly returns the positive
+    frequencies. For a complex input signals, code qould require adaptation.
+
+    **References**
+
+       Prieto, G.A. (2022). The crossspec spectrum analyze package in Python.
+       Seism. Res. Lett In review.
+
+    **Examples**
+
+    To do
+
+    |
+
+    """
+
+    data_is_df = False
+    if isinstance(data, pd.DataFrame):
+        data_is_df = True
+        # if data.index.freq is not None:
+        #     dt = pd.to_timedelta(data.index.freq).total_seconds()
+
+    if fmax <= 0.0:
+        fmax = 0.5 / dt
+
+    nwin = int(np.round(twin / dt))
+    if olap <= 0.0:
+        njump = nwin
+    else:
+        njump = int(np.round(twin * (1.0 - olap) / dt))
+
+    npts = np.shape(data)[0]
+    nmax = npts - nwin
+    nvec = np.arange(0, nmax, njump)
+    t = nvec * dt  # window starting times in seconds
+    nspec = len(nvec)
+    nvars = 5
+
+    if data_is_df:
+        tc = data.index[0] + pd.to_timedelta(t, unit='seconds')  # window middle datetime
+        data = data.to_numpy()
+    else:
+        tc = t + twin // 2  # window middle times in seconds
+
+    print("Window length %5.1fs and overlap %2.0f%%" % (twin, olap * 100))
+    print("Total number of cross-spectral estimates", nspec)
+    print("Frequency band of interest (%5.2f-%5.2f)Hz" % (fmin, fmax))
+
+    if vn is None or lamb is None:
+        vn, lamb = utils.dpss(nwin, nw, kspec)
+
+    if nspec == 0:
+        return None
+
+    for i in range(nspec):
+        if (i + 1) % 10 == 0:
+            print("Loop ", i + 1, " of ", nspec)
+
+        i1 = nvec[i]
+        i2 = i1 + nwin
+
+        cross_psd = MTCross(
+            data[i1: i2 + 1, 0],  # x: independent/explanatory variable
+            data[i1: i2 + 1, 1],  # y: dependent/response variable
+            nw,
+            kspec,
+            dt,
+            iadapt=iadapt,
+            vn=vn,
+            lamb=lamb,
+            wl=wl,
+        )
+
+        freq2 = cross_psd.freq
+
+        if (i==0):
+            fres   = np.where((freq2>=fmin) & (freq2<=fmax))[0]
+            nf     = len(fres)
+            f      = freq2[fres]
+
+            res = xr.DataArray(
+                np.ones((nf, nspec, nvars), dtype=np.complex) * np.nan,
+                dims=('f', 't', 'var'),
+                coords=dict(f=f.flatten().astype(np.float64), t=tc, var=[
+                    'Sxx', 'Syy', 'Sxy', 'Syx', 'Cxy'])
+            )
+
+        if np.isnan(data[i1: i2 + 1, :]).sum() > 0.1 * nwin:
+            for var in ['Sxx', 'Syy', 'Sxy', 'Syx', 'Cxy']:
+                res.sel(var=var)[:, i] = (1+1j)*np.nan
+
+        else:
+            res.sel(var='Sxx')[:, i] = cross_psd.Sxx[fres, 0]
+            res.sel(var='Syy')[:, i] = cross_psd.Syy[fres, 0]
+            res.sel(var='Sxy')[:, i] = cross_psd.Sxy[fres, 0]
+            res.sel(var='Cxy')[:, i] = cross_psd.cohe[fres, 0]
+
+    return res

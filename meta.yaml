@@ -24,6 +24,7 @@ requirements:
     - jupyter
     - ipykernel
     - requests
+    - xarray
 
 about:
   home: https://github.com/gaprieto/multitaper
