@@ -129,7 +129,7 @@ class MTCross:
 
     """
 
-    def __init__(self,x,y,nw=4,kspec=0,dt=1.0,nfft=0,iadapt=0,wl=0.0):
+    def __init__(self,x,y,nw=4,kspec=0,dt=1.0,nfft=0,iadapt=0,vn=None,lamb=None,wl=0.0):
         """
         The constructor of the MTCross class.
 
@@ -164,6 +164,10 @@ class MTCross:
             0 - adaptive multitaper
             1 - unweighted, wt =1 for all tapers
             2 - wt by the eigenvalue of DPSS
+        vn : ndarray [npts,kspec], optional
+            Slepian sequences, can be precomputed to save time
+        lamb : ndarray [kspec], optional
+            Eigenvalues of DPSS, can be precomputed to save time
         wl : float, optional
             water-level for stabilizing deconvolution (transfer function).
             defined as proportion of mean power of Syy
@@ -202,7 +206,7 @@ class MTCross:
             if (nx>1 or ny>1):
                 raise ValueError("Arrays must be a single column")
 
-            x = spec.MTSpec(x,nw,kspec,dt,nfft,iadapt=iadapt)
+            x = spec.MTSpec(x, nw, kspec, dt, nfft, iadapt=iadapt, vn=vn, lamb=lamb)
             y = spec.MTSpec(y,nw,kspec,dt,nfft,iadapt=iadapt,vn=x.vn,lamb=x.lamb)
 
         #------------------------------------------------------------
