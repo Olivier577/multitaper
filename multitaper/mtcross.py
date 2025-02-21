@@ -970,17 +970,17 @@ def cross_spectrogram(
                 np.ones((nf, nspec, nvars), dtype=complex) * np.nan,
                 dims=('f', 't', 'var'),
                 coords=dict(f=f.flatten().astype(np.float64), t=tc, var=[
-                    'Sxx', 'Syy', 'Sxy', 'Syx', 'Cxy'])
+                    'Sxx', 'Syy', 'Sxy', 'Syx', 'cohe'])
             )
 
         if np.isnan(data[i1: i2 + 1, :]).sum() > 0.1 * nwin:
-            for var in ['Sxx', 'Syy', 'Sxy', 'Syx', 'Cxy']:
+            for var in ['Sxx', 'Syy', 'Sxy', 'Syx', 'cohe']:
                 res.sel(var=var)[:, i] = (1+1j)*np.nan
 
         else:
             res.sel(var='Sxx')[:, i] = cross_psd.Sxx[fres, 0]
             res.sel(var='Syy')[:, i] = cross_psd.Syy[fres, 0]
             res.sel(var='Sxy')[:, i] = cross_psd.Sxy[fres, 0]
-            res.sel(var='Cxy')[:, i] = cross_psd.cohe[fres, 0]
+            res.sel(var='cohe')[:, i] = cross_psd.cohe[fres, 0]
 
     return res
