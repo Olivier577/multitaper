@@ -967,7 +967,7 @@ def cross_spectrogram(
             f      = freq2[fres]
 
             res = xr.DataArray(
-                np.ones((nf, nspec, nvars), dtype=np.complex) * np.nan,
+                np.ones((nf, nspec, nvars), dtype=complex) * np.nan,
                 dims=('f', 't', 'var'),
                 coords=dict(f=f.flatten().astype(np.float64), t=tc, var=[
                     'Sxx', 'Syy', 'Sxy', 'Syx', 'Cxy'])

@@ -1011,7 +1011,7 @@ def spectrogram(data,dt,twin,olap=0.5,nw=3.5,kspec=5,fmin=0.0,fmax=-1.0,iadapt=0
          nf     = len(fres)
          f      = freq2[fres]
          res = xr.DataArray(
-            np.ones((nf, nspec, 2), dtype=np.complex) * np.nan,
+            np.ones((nf, nspec, 2), dtype=complex) * np.nan,
             dims=('f', 't', 'var'),
             coords=dict(f=f.flatten().astype(np.float64), t=tc, var=['Quad', 'MT'])
          )
